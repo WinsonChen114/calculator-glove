@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -102,28 +103,15 @@ int main(void)
   MX_ADC1_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  uint8_t total = 0;
+  int16_t Zvalarr[] = {16000, 16000, 16000, 16000};
+  uint32_t arraycount = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
-	  //Flex Sensor Convert
-	  uint32_t ADC_VAL[5];
-	HAL_ADC_Start_DMA(&hadc1, ADC_VAL, 5);
-	uint8_t ch = ADC_VAL[0];
-	HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 0xFFFF);
-	//HAL_UART_Receive(&huart1, (uint8_t *)&ch, 1, 0xFFFF);
-//	  HAL_ADC_Start(&hadc1);//start conversion
-//	  HAL_ADC_PollForConversion(&hadc1, 0xFFFFFFFF);//wait for conversion to finish
-//	  uint32_t ADC_VAL0 = ADC_VAL[0];//retrieve value
-//	  uint32_t ADC_VAL2 = ADC_VAL[1];
-//	  uint32_t ADC_VAL4 = ADC_VAL[2];
-//	  uint32_t ADC_VAL6 = ADC_VAL[3];
-//	  uint32_t ADC_VAL8 = ADC_VAL[4];
-
 	  //CTRL REG 1
 	  	  uint8_t ctrl_buf_1[2] = {0x20, 0b10010111};//CTRL REG 1 addr and data
 	  	  ret = HAL_I2C_Master_Transmit(&hi2c1, ACC_W_M, ctrl_buf_1 , 2, 1000);
@@ -177,6 +165,15 @@ int main(void)
 	  			 ret =  HAL_I2C_Master_Receive(&hi2c1, ACC_R_M, buf, 6, 1000); // [Zhigh, Zlow, YHigh, Ylow, Xhigh, Xlow]
 	  		 }
 	  	  Zval = ((buf[0]<<8) + buf[1]);
+	  	  Zvalarr[arraycount%4] = Zval;
+	  	  arraycount++;
+	  	  int Zavg = 0;
+	  	  for(int i = 0; i < 4; i++)
+	  	  {
+	  		  Zavg += Zvalarr[i];
+	  	  }
+	  	  Zavg = Zavg/4;
+
 	  	  Yval = ((buf[2]<<8) + buf[3]);
 	  	  Xval = ((buf[4]<<8) + buf[5]);
 
@@ -184,14 +181,89 @@ int main(void)
 	  	  double YGs = Yval/20224.00;
 	  	  double XGs = Xval/20224.00;
 
+	  //Flex Sensor Convert
+	  uint32_t ADC_VAL[5];
+	  HAL_ADC_Start_DMA(&hadc1, ADC_VAL, 5);
+//	uint8_t ch = ADC_VAL[0];
+	//HAL_UART_Receive(&huart1, (uint8_t *)&ch, 1, 0xFFFF);
+//	  HAL_ADC_Start(&hadc1);//start conversion
+//	  HAL_ADC_PollForConversion(&hadc1, 0xFFFFFFFF);//wait for conversion to finish
+//	  uint32_t ADC_VAL0 = ADC_VAL[0];//retrieve value
+//	  uint32_t ADC_VAL2 = ADC_VAL[1];
+//	  uint32_t ADC_VAL4 = ADC_VAL[2];
+//	  uint32_t ADC_VAL6 = ADC_VAL[3];
+//	  uint32_t ADC_VAL8 = ADC_VAL[4];
 
 
-	  	  //Print Results
-	  	  printf("x axis %d raw, %0.2f Gs\n\r", Xval, Xval/16896.00);
-	  	  printf("y axis %d raw, %0.2f Gs\n\r", Yval, Yval/16896.00);
-	  	  printf("z axis %d raw, %0.2f Gs\n\r", Zval, Zval/16896.00);
-	  	  printf("\n\r");
-	  	  HAL_Delay(500);
+
+	  	  int pinky;
+	  	  int ring;
+	  	  int middle;
+	  	  int index;
+	  	  int thumb;
+
+	  	  if(ADC_VAL[0] > 700){
+	  		  pinky = 1;
+	  	  }
+	  	  else{
+	  		  pinky = 0;
+	  	  }
+	  	if(ADC_VAL[1] > 700){
+	  		  ring = 1;
+	  	}
+	  	else{
+	  		  ring = 0;
+	  	}
+	  	if(ADC_VAL[2] > 700){
+	  		  middle = 1;
+	  	}
+	  	else{
+	  		  middle = 0;
+	  	}
+	  	if(ADC_VAL[3] > 700){
+	  		  index = 1;
+	  	}
+	  	else{
+	  		  index = 0;
+	  	}
+	  	if(ADC_VAL[4] > 700){
+	  		  thumb = 5;
+	  	}
+	  	else{
+	  		  thumb = 0;
+	  	}
+
+	  	int digit = ring + pinky + middle + index + thumb;
+
+	  	if(Zavg < 0){
+	  		 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 1);
+	  		total = total*10;
+	  		total += digit;
+	  		uint8_t* val = &total;
+		  	HAL_UART_Transmit(&huart1, val, 1, 0xFFFF);
+	  		while (Zavg < 0)
+	  		{
+	  			uint8_t buf[6] = {0xA8};// [Zhigh, Zlow, YHigh, Ylow, Xhigh, Xlow]
+				ret = HAL_I2C_Master_Transmit(&hi2c1, ACC_W_M, buf, 6, 1000);
+				  if ( ret != HAL_OK ) {
+						strcpy((char*)buf, "Error Tx\r\n");
+					 }
+				  else {
+						 ret =  HAL_I2C_Master_Receive(&hi2c1, ACC_R_M, buf, 6, 1000); // [Zhigh, Zlow, YHigh, Ylow, Xhigh, Xlow]
+					 }
+				  Zval = ((buf[0]<<8) + buf[1]);
+				  Zvalarr[arraycount%4] = Zval;
+				  arraycount++;
+				  Zavg = 0;
+				  for(int i = 0; i < 4; i++)
+				  {
+				  	Zavg += Zvalarr[i];
+				  }
+				  Zavg = Zavg/4;
+	  			//Only loop again once Zavgh is greater than 0
+	  		}
+	  	}
+	  	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 0);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -305,7 +377,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_11;
+  sConfig.Channel = ADC_CHANNEL_15;
   sConfig.Rank = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -458,7 +530,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|LD3_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : PA0 */
   GPIO_InitStruct.Pin = GPIO_PIN_0;
@@ -473,6 +545,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
   HAL_GPIO_Init(VCP_TX_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PB1 LD3_Pin */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|LD3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA8 */
   GPIO_InitStruct.Pin = GPIO_PIN_8;
@@ -489,13 +568,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   GPIO_InitStruct.Alternate = GPIO_AF3_USART2;
   HAL_GPIO_Init(VCP_RX_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : LD3_Pin */
-  GPIO_InitStruct.Pin = LD3_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LD3_GPIO_Port, &GPIO_InitStruct);
 
 }
 
