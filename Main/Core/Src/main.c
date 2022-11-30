@@ -22,6 +22,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include <stdbool.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -31,6 +33,17 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
+#define INVALID_VAL 10
+
+#define ADD 0
+#define SUB 1
+#define EQUAL 2
+#define DIV 3
+#define MULT 4
+
+#define NEGATE 9
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -43,6 +56,17 @@ UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
+int curr_number = 0;
+int prev_operation = ADD;
+bool prev_message_is_digit = true;
+bool num_is_negated = false;
+int result = 0;
+bool prev_message_is_equal = false;
+
+uint8_t operation_val = INVALID_VAL;
+uint8_t digit_val = INVALID_VAL;
+
 
 /* USER CODE END PV */
 
@@ -57,6 +81,161 @@ static void MX_USART1_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+void print_result() {
+	// TODO - print the result onto the display
+	// call something like void update_display_number(result)
+}
+
+void reset_to_beginning() {
+	// TODO - this fx can be called if there is an error or if there is a new equation or etc.
+	curr_number = 0;
+	prev_operation = ADD;
+	prev_message_is_digit = true;
+	num_is_negated = false;
+	result = 0;
+	prev_message_is_equal = false;
+}
+
+void negate() {
+	num_is_negated = !num_is_negated;
+}
+
+void print_error() {
+	// TODO - print error to display
+	reset_to_beginning();
+}
+
+void execute_calculations() {
+	if (num_is_negated) {
+		curr_number *= -1;
+	}
+	if (prev_operation == ADD) {
+		result += curr_number;
+	}
+	else if (prev_operation == SUB) {
+		result -= curr_number;
+	}
+	else if (prev_operation == DIV) {
+		if (curr_number == 0) {
+			print_error();
+			return;
+		}
+		result /= curr_number;
+	}
+	else if (prev_operation == MULT) {
+			result *= curr_number;
+		}
+
+	num_is_negated = false;
+
+}
+
+
+void update_operation(uint8_t operation_val)
+{
+
+	if (!prev_message_is_digit && !prev_message_is_equal) {
+		// if you have back to back operations, and it previously wasn't equal, then that's bad
+		print_error();
+		reset_to_beginning();
+	}
+
+
+	// DIGIT/OPERATION -> OPERATION
+	if (operation_val == EQUAL) {
+		execute_calculations();
+	}
+	else {
+		execute_calculations();
+		prev_operation = operation_val;
+	}
+
+	prev_message_is_equal = operation_val == EQUAL;
+	prev_message_is_digit = false;
+}
+
+void update_digit() {
+
+	if (prev_message_is_equal) {
+		reset_to_beginning();
+	}
+	if (!prev_message_is_digit) {
+		// OPERATION -> DIGIT
+		curr_number = 0;
+	}
+	// OPERATION/DIGIT -> DIGIT
+	bool curr_number_is_negative = curr_number < 0;
+	if (curr_number_is_negative) {
+		curr_number *= -1;
+	}
+	// is now positive
+	curr_number *= 10;
+	curr_number += digit_val;
+
+	if (curr_number_is_negative) {
+		// re-negate it
+		curr_number *= -1;
+	}
+	prev_message_is_equal = false;
+	prev_message_is_digit = true;
+}
+
+void handle_operation_val() {
+	if (operation_val == NEGATE) {
+	  negate();
+  }
+  else {
+	  update_operation(operation_val);
+  }
+}
+
+void handle_digit_val() {
+	update_digit();
+}
+
+void test() {
+	digit_val = 1;
+	handle_digit_val();
+
+	digit_val = 0;
+	handle_digit_val();
+
+	operation_val = ADD;
+	handle_operation_val();
+
+	digit_val = 1;
+	handle_digit_val();
+
+	operation_val = EQUAL;
+	handle_operation_val();
+	operation_val = EQUAL;
+	handle_operation_val();
+	operation_val = EQUAL;
+	handle_operation_val();
+	operation_val = EQUAL;
+	handle_operation_val();
+	operation_val = EQUAL;
+	handle_operation_val();
+	operation_val = EQUAL;
+	handle_operation_val();
+
+	digit_val = 5;
+	handle_digit_val();
+
+	digit_val = 2;
+	handle_digit_val();
+
+	operation_val = SUB;
+	handle_operation_val();
+
+	digit_val = 2;
+	handle_digit_val();
+
+	operation_val = EQUAL;
+	handle_operation_val();
+	reset_to_beginning();
+}
 
 /* USER CODE END 0 */
 
@@ -91,19 +270,32 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  uint8_t value1 = 0;
+
+  test();
+
+
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_Delay(250);
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, 1);
-	  uint8_t* valptr = &value1;
-	  HAL_UART_Receive(&huart1, valptr, 1, 0xFFFF);
-	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, 0);
-	  HAL_Delay(250);
+	  operation_val = INVALID_VAL;
+	  digit_val = INVALID_VAL;
+	  HAL_Delay(50);
+	  HAL_UART_Receive(&huart1, &operation_val, 1, 100);
+	  HAL_Delay(50);
+	  HAL_UART_Receive(&huart2, &digit_val, 1, 100);
+	  HAL_Delay(50);
+
+	  if (operation_val != INVALID_VAL) {
+		  handle_operation_val();
+	  }
+	  if (digit_val != INVALID_VAL) {
+		  handle_digit_val();
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
