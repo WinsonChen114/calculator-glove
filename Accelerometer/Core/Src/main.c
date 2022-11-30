@@ -236,11 +236,12 @@ int main(void)
 	  	int digit = ring + pinky + middle + index + thumb;
 
 	  	if(Zavg < 0){
-	  		 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 1);
+	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 1);
 	  		total = total*10;
 	  		total += digit;
 	  		uint8_t* val = &total;
 		  	HAL_UART_Transmit(&huart1, val, 1, 0xFFFF);
+		  	HAL_Delay(250);
 	  		while (Zavg < 0)
 	  		{
 	  			uint8_t buf[6] = {0xA8};// [Zhigh, Zlow, YHigh, Ylow, Xhigh, Xlow]
@@ -262,8 +263,10 @@ int main(void)
 				  Zavg = Zavg/4;
 	  			//Only loop again once Zavgh is greater than 0
 	  		}
+
 	  	}
-	  	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 0);
+	  	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, 0);\
+	  	HAL_Delay(250);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
