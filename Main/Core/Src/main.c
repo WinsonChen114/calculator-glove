@@ -258,7 +258,7 @@ void handle_backspace() {
 	if(current_num_update == 1)
 	{
 		// Update first_num
-		int last_digit = first_num % 10.0;
+		int last_digit = (long long)first_num % 10;
 		first_num = first_num - last_digit;
 		first_num = first_num / 10.0;
 
@@ -266,7 +266,7 @@ void handle_backspace() {
 	else
 	{
 		// Update second_num
-		int last_digit = second_num % 10.0;
+		int last_digit = (long long)second_num % 10;
 		second_num = second_num - last_digit;
 		second_num = second_num / 10.0;
 	}
@@ -280,7 +280,7 @@ void update_operation()
 	{
 		execute_calculation();
 		first_num = result;
-		if(first_num >= 100000000000000000.0)
+		if(first_num >= 10000000000000000.0)
 		{
 			error_flag = OVF_ERR;
 			return;
@@ -335,16 +335,16 @@ void update_digit() {
 void update_display()
 {
 	// Buffer to hold string representation of numbers
-	char numstr[40];
+	char numstr[41];
+	memset(numstr, ' ', 40);
+	numstr[40] = '\0';
 
-	// Make space for potential sign of first number
-	if(first_num_neg)
+	lcd_send_cmd(0x00|0x80);
+
+	// Blank space for positive first number
+	if(!first_num_neg)
 	{
-		lcd_send_cmd(0x00|0x80);
-	}
-	else
-	{
-		lcd_send_cmd(0x01|0x80);
+		lcd_send_char(' ');
 	}
 	// Update first number
 	snprintf(numstr, 18, "%.5f", first_num);
@@ -377,15 +377,16 @@ void update_display()
 		lcd_send_char(' ');
 	}
 
-	// Make space for potential sign of second number
-	if(second_num_neg)
+	lcd_send_cmd(0x40|0x80);
+
+	// Blank space for positive second number
+	if(!second_num_neg)
 	{
-		lcd_send_cmd(0x40|0x80);
+		lcd_send_char(' ');
 	}
-	else
-	{
-		lcd_send_cmd(0x41|0x80);
-	}
+
+	// clear numstr buffer for second number
+	memset(numstr, ' ', 18);
 	snprintf(numstr, 18, "%.5f", second_num);
 	lcd_send_string(numstr);
 
@@ -395,23 +396,24 @@ void update_display()
 		lcd_send_cmd(0x53|0x80);
 		lcd_send_char('=');
 
+		// clear numstr buffer for result
+		memset(numstr, ' ', 18);
 		snprintf(numstr, 40, "%.10f", result);
 		// Break result into 2 parts to display on third and fourth line
-		char res_front[20];
-		char res_back[20];
+		char res_front[21];
+		char res_back[21];
 		memcpy(res_front, numstr, 20*sizeof(*numstr));
+		res_front[20] = '\0';
 		memcpy(res_back, &numstr[20], 20*sizeof(*numstr));
+		res_back[20] = '\0';
 
 		// Display third line
 		lcd_send_cmd(0x14|0x80);
 		lcd_send_string(res_front);
 
 		// Display fourth line
-		if(res_back[0] != '\0')
-		{
-			lcd_send_cmd(0x54|0x80);
-			lcd_send_string(res_back);
-		}
+		lcd_send_cmd(0x54|0x80);
+		lcd_send_string(res_back);
 	}
 }
 
@@ -460,7 +462,7 @@ void handle_digit_val() {
 	{
 		// If first_number will overflow
 		// can only display 18 digits
-		if(first_num >= 100000000000000000.0)
+		if(first_num >= 10000000000000000.0)
 		{
 			error_flag = OVF_ERR;
 			return;
@@ -470,7 +472,7 @@ void handle_digit_val() {
 	{
 		// If second_number will overflow
 		// can only display 18 digits
-		if(second_num >= 100000000000000000.0)
+		if(second_num >= 10000000000000000.0)
 		{
 			error_flag = OVF_ERR;
 			return;
@@ -567,15 +569,15 @@ void lcd_init() {
 	lcd_send_cmd (0x20);  // 4bit mode
 	HAL_Delay(10);
 	lcd_send_cmd (0x28); // Function set --> DL=0 (4 bit mode), N = 1 (2 line display) F = 0 (5x8 characters)
-	HAL_Delay(1);
+	HAL_Delay(5);
 	lcd_send_cmd (0x08); // Display on/off control --> D=0,C=0, B=0  ---> display off
-	HAL_Delay(1);
+	HAL_Delay(5);
 	lcd_send_cmd (0x01);  // clear display
-	HAL_Delay(1);
+	HAL_Delay(5);
 	lcd_send_cmd (0x06); // Entry mode set --> I/D = 1 (increment cursor) & S = 0 (no shift)
-	HAL_Delay(1);
+	HAL_Delay(5);
 	lcd_send_cmd (0x0F); // Display on/off control --> D, C, B= 1 Display, Cursor, and Blinking on
-	HAL_Delay(1);
+	HAL_Delay(5);
 	lcd_send_cmd(0x00|0x80); // Reset cursor to beginning
 }
 
